@@ -6,7 +6,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
-static filenode *add_filenode(filenode **flist, char *fname, unsigned int size)
+filenode *add_filenode(filenode **flist, char *fname, unsigned int size)
 {
     filenode *newnode = malloc(sizeof(filenode));
     filenode *curr = *flist;
@@ -64,6 +64,31 @@ filenode *split_file(char *input_path, char *output_path, long size)
     fclose(fin);
 
     return flist;
+}
+
+void merge(filenode *input_path, char *output_path)
+{
+    filenode *fcurr = input_path;
+    FILE *fout = fopen(output_path, "wb");
+    char buf[BUFSIZE];
+
+    if (!fout)
+        err(EXIT_FAILURE, "%s", fout);
+    while (fcurr) {
+        FILE *fin = fopen(fcurr->path, "rb");
+        int rbytes;
+
+        if (!fout)
+            err(EXIT_FAILURE, "%s", fin);
+
+        rbytes = fread(buf, 1, BUFSIZE, fin);
+        fwrite(buf, 1, rbytes, fout);
+        fclose(fin);
+
+        printf("%s\n", fcurr->path);
+        fcurr = fcurr->next;
+    }
+    fclose(fout);
 }
 
 void gen_sha256sum(filenode *flist)
