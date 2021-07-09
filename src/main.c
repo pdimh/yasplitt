@@ -5,13 +5,15 @@
 #include <sodium.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 struct arguments {
     char *args[2];
     int max_size;
-    char split, merge;
+    char split, merge, sum;
     filenode *input_file;
     char *output_file;
+    char *sum_file;
 };
 
 static int parse_opt(int key, char *arg, struct argp_state *state)
@@ -83,6 +85,10 @@ static int parse_opt(int key, char *arg, struct argp_state *state)
         }
         arguments->merge = 1;
         break;
+    case 'c':
+        arguments->sum = 1;
+        arguments->sum_file = arg;
+        break;
     case 'o':
         arguments->output_file = arg;
         break;
@@ -106,14 +112,17 @@ int main(int argc, char **argv)
 {
     struct arguments arguments = {.split = 0,
                                   .merge = 0,
+                                  .sum = 0,
                                   .input_file = NULL,
                                   .output_file = NULL,
+                                  .sum_file = NULL,
                                   .max_size = 0};
     struct argp_option options[] = {
         {"output", 'o', "OUTPUT_PATH", 0, "Set output path"},
         {"split", 's', "MAXSIZE", 0,
          "Split file into files with size smaller than MAXSIZE"},
         {"merge", 'm', 0, 0, "Merge files into a single file"},
+        {"checksum", 'c', "SUM_PATH", 0, "Verify integrity using SHA256 sum"},
         {0}};
     struct argp argp = {options, parse_opt, "PATH", "teste"};
 
@@ -128,10 +137,20 @@ int main(int argc, char **argv)
             arguments.output_file = arguments.input_file->path;
         filenode *flist = split_file(arguments.input_file->path,
                                      arguments.output_file, arguments.max_size);
-        gen_sha256sum(flist);
+        gen_sha256_file(flist);
     }
 
     if (arguments.merge) {
+        if (!arguments.output_file ||
+            !strcmp(arguments.input_file->path, arguments.output_file)) {
+            errx(EXIT_FAILURE,
+                 "Merge operation requires setting the output "
+                 "path and it must be different from input path.");
+        }
+        if (arguments.sum && arguments.sum_file) {
+
+            check_sha256sum(arguments.input_file, arguments.sum_file);
+        }
         merge(arguments.input_file, arguments.output_file);
     }
 
