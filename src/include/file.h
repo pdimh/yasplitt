@@ -21,4 +21,5 @@ void gen_sha256_file(filenode *flist);
 void check_sha256sum(filenode *flist, char *sum_path);
 off_t get_filesize(char *f);
 unsigned char *hex_to_byte(unsigned char *arr);
+void calculate_sha256sum(filenode *flist);
 #endif

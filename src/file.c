@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <utils.h>
 
 filenode *add_filenode(filenode **flist, char *fname, off_t size)
@@ -42,7 +43,7 @@ filenode *split_file(char *input_path, char *output_path, long size)
     if (!fin)
         err(EXIT_FAILURE, "%s", input_path);
 
-    if (!stat(input_path, &st))
+    if (stat(input_path, &st))
         errx(EXIT_FAILURE, "'stat' failed for '%s'", input_path);
 
     num_files = (int)ceil((float)st.st_size / size);
@@ -55,11 +56,17 @@ filenode *split_file(char *input_path, char *output_path, long size)
         int rbytes = fread(buf, 1, size, fin);
 
         sprintf(fname, "%s.part.%0*d", output_path, padding, counter++);
+
+        if (!access(fname, F_OK))
+            errx(EXIT_FAILURE, "File already exists: %s", fname);
+
         fout = fopen(fname, "wb");
         if (!fout)
             err(EXIT_FAILURE, "%s", fout);
         fwrite(buf, 1, rbytes, fout);
         fcurr = add_filenode(&flist, fname, rbytes);
+
+        printf("%s: ok\n", fname);
 
         fclose(fout);
     }
@@ -101,24 +108,22 @@ void gen_sha256_file(filenode *flist)
 
     if (flist) {
         FILE *fout;
-        char fname[strrchr(flist->path, '.') - flist->path];
+        char fname[strrchr(flist->path, '.') - flist->path + 5];
 
-        strncpy(fname, flist->path,
-                strrchr(flist->path, '.') - flist->path - 5);
+        strncpy(fname, flist->path, strrchr(flist->path, '.') - flist->path);
         strncpy(fname + sizeof(fname) - 5, ".SUM", 5);
+
+        if (!access(fname, F_OK))
+            err(EXIT_FAILURE, "File already exists: %s", fname);
 
         fout = fopen(fname, "w");
 
         if (!fout)
             err(EXIT_FAILURE, "%s", fname);
 
-        while (fcurr) {
-            FILE *fin = fopen(fcurr->path, "rb");
-            char buf[fcurr->size];
+        calculate_sha256sum(flist);
 
-            fread(buf, 1, fcurr->size, fin);
-            crypto_hash_sha256(fcurr->sha256, (unsigned char *)buf,
-                               fcurr->size);
+        while (fcurr) {
             for (int i = 0; i < crypto_hash_sha256_BYTES; i++)
                 fprintf(fout, "%02x", fcurr->sha256[i]);
             fprintf(fout, " %s\n", fcurr->path);
