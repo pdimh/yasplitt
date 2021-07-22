@@ -49,7 +49,7 @@ filenode *split_file(char *input_path, char *output_path, long size)
     filenode *flist = NULL;
     FILE *fin = fopen(input_path, "rb");
     struct stat st;
-    char buf[size + 1];
+    char *buf = malloc(size + 1);
     char *fname;
     int counter = 0;
     int padding;
@@ -86,6 +86,7 @@ filenode *split_file(char *input_path, char *output_path, long size)
         fclose(fout);
     }
     free(fname);
+    free(buf);
     fclose(fin);
 
     return flist;
@@ -141,7 +142,7 @@ void gen_sha256_file(filenode *flist)
         while (fcurr) {
             for (int i = 0; i < crypto_hash_sha256_BYTES; i++)
                 fprintf(fout, "%02x", fcurr->sha256[i]);
-            fprintf(fout, " %s\n", fcurr->path);
+            fprintf(fout, "  %s\n", strdup(basename(fcurr->path)));
             fcurr = fcurr->next;
         }
         fclose(fout);
@@ -153,10 +154,11 @@ void calculate_sha256sum(filenode *flist)
     filenode *fcurr = flist;
     while (fcurr) {
         FILE *fin = fopen(fcurr->path, "rb");
-        char buf[fcurr->size];
+        char *buf = malloc(fcurr->size);
 
         fread(buf, 1, fcurr->size, fin);
         crypto_hash_sha256(fcurr->sha256, (unsigned char *)buf, fcurr->size);
+        free(buf);
         fcurr = fcurr->next;
     }
 }
@@ -208,7 +210,7 @@ void check_sha256sum(filenode *flist, char *sum_path)
             if (match) {
                 printf("ok\n");
             } else
-                printf("failed2\n");
+                printf("failed\n");
         } else
             printf("failed\n");
         fcurr = fcurr->next;
