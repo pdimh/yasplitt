@@ -15,4 +15,4 @@
 
 bin_PROGRAMS = yasplitt
 yasplitt_SOURCES = main.c file.c utils.c
-yasplitt_CFLAGS = -I./include
+yasplitt_CFLAGS = -I$(srcdir)/include
