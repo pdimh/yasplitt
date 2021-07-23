@@ -117,25 +117,21 @@ void merge(filenode *input_path, char *output_path)
     fclose(fout);
 }
 
-void gen_sha256_file(filenode *flist)
+void gen_sha256_file(filenode *flist, char *sum_path)
 {
 
     filenode *fcurr = flist;
 
     if (flist) {
         FILE *fout;
-        char fname[strrchr(flist->path, '.') - flist->path + 5];
 
-        strncpy(fname, flist->path, strrchr(flist->path, '.') - flist->path);
-        strncpy(fname + sizeof(fname) - 5, ".SUM", 5);
+        if (!access(sum_path, F_OK))
+            err(EXIT_FAILURE, "File already exists: %s", sum_path);
 
-        if (!access(fname, F_OK))
-            err(EXIT_FAILURE, "File already exists: %s", fname);
-
-        fout = fopen(fname, "w");
+        fout = fopen(sum_path, "w");
 
         if (!fout)
-            err(EXIT_FAILURE, "%s", fname);
+            err(EXIT_FAILURE, "%s", sum_path);
 
         calculate_sha256sum(flist);
 
@@ -185,7 +181,7 @@ void check_sha256sum(filenode *flist, char *sum_path)
 
         rewind(fsum);
         while (!feof(fsum)) {
-            nread = fscanf(fsum, "%ms %ms\n", &sum, &fname);
+            nread = fscanf(fsum, "%ms  %ms\n", &sum, &fname);
 
             if (nread != 2)
                 errx(EXIT_FAILURE, "Error during checksum file parse. Please, "

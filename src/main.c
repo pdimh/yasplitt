@@ -140,6 +140,7 @@ int main(int argc, char **argv)
         {"checksum", 'c', "SUM_PATH", 0, "Verify integrity using SHA256 sum"},
         {0}};
     struct argp argp = {options, parse_opt, "PATH", "teste"};
+    filenode *flist = NULL;
 
     if (sodium_init() < 0) {
         err(EXIT_FAILURE, "Error initing libsodium");
@@ -150,22 +151,25 @@ int main(int argc, char **argv)
     if (arguments.split) {
         if (!arguments.output_file)
             arguments.output_file = arguments.input_file->path;
-        filenode *flist = split_file(arguments.input_file->path,
-                                     arguments.output_file, arguments.max_size);
-        gen_sha256_file(flist);
+        flist = split_file(arguments.input_file->path, arguments.output_file,
+                           arguments.max_size);
+    }
+
+    if (arguments.sum && arguments.sum_file) {
+        if (arguments.split)
+            gen_sha256_file(flist, arguments.sum_file);
+        else
+            check_sha256sum(arguments.input_file, arguments.sum_file);
     }
 
     if (arguments.merge) {
         if (!arguments.output_file ||
             !strcmp(arguments.input_file->path, arguments.output_file)) {
             errx(EXIT_FAILURE,
-                 "Merge operation requires setting the output "
+                 "Merge operation requires an output "
                  "path and it must be different from input path.");
         }
-        if (arguments.sum && arguments.sum_file) {
 
-            check_sha256sum(arguments.input_file, arguments.sum_file);
-        }
         merge(arguments.input_file, arguments.output_file);
     }
 
