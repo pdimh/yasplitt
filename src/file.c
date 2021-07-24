@@ -107,8 +107,10 @@ void merge(filenode *input_path, char *output_path)
         if (!fout)
             err(EXIT_FAILURE, "%s", fin);
 
-        rbytes = fread(buf, 1, BUFSIZE, fin);
-        fwrite(buf, 1, rbytes, fout);
+        while (!feof(fin)) {
+            rbytes = fread(buf, 1, BUFSIZE, fin);
+            fwrite(buf, 1, rbytes, fout);
+        }
         fclose(fin);
 
         printf("%s\n", fcurr->path);
