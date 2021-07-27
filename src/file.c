@@ -95,11 +95,15 @@ filenode *split_file(char *input_path, char *output_path, long size)
 void merge(filenode *input_path, char *output_path)
 {
     filenode *fcurr = input_path;
-    FILE *fout = fopen(output_path, "wb");
+    FILE *fout;
     char buf[BUFSIZE];
 
-    if (!fout)
+    if (!access(output_path, F_OK))
+        errx(EXIT_FAILURE, "File already exists: %s", output_path);
+
+    if (!(fout = fopen(output_path, "wb")))
         err(EXIT_FAILURE, "%s", fout);
+
     while (fcurr) {
         FILE *fin = fopen(fcurr->path, "rb");
         int rbytes;
@@ -128,7 +132,7 @@ void gen_sha256_file(filenode *flist, char *sum_path)
         FILE *fout;
 
         if (!access(sum_path, F_OK))
-            err(EXIT_FAILURE, "File already exists: %s", sum_path);
+            errx(EXIT_FAILURE, "File already exists: %s", sum_path);
 
         fout = fopen(sum_path, "w");
 
