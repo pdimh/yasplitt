@@ -36,20 +36,20 @@ filenode *add_filenode(filenode **flist, char *fname, off_t size)
             curr = curr->next;
     }
     curr->next = newnode;
-    newnode->path = malloc(strlen(fname));
+    newnode->path = malloc(strlen(fname) + 1);
     newnode->size = size ? size : get_filesize(fname);
     newnode->next = NULL;
-    strncpy(newnode->path, fname, strlen(fname));
+    strncpy(newnode->path, fname, strlen(fname) + 1);
     return curr;
 }
 
-filenode *split_file(char *input_path, char *output_path, long size)
+filenode *split_file(char *input_path, char *output_path, off_t size)
 {
     filenode *fcurr;
     filenode *flist = NULL;
     FILE *fin = fopen(input_path, "rb");
     struct stat st;
-    char *buf = malloc(size + 1);
+    char *buf = malloc(size);
     char *fname;
     int counter = 0;
     int padding;
@@ -64,11 +64,11 @@ filenode *split_file(char *input_path, char *output_path, long size)
     num_files = (int)ceil((float)st.st_size / size);
     padding = num_files > 1 ? (int)ceil(log10(num_files)) : 1;
 
-    fname = malloc(strlen(output_path) + padding + 5);
+    fname = malloc(strlen(output_path) + padding + 7);
 
     while (!feof(fin)) {
         FILE *fout;
-        int rbytes = fread(buf, 1, size, fin);
+        off_t rbytes = fread(buf, 1, size, fin);
 
         sprintf(fname, "%s.part.%0*d", output_path, padding, counter++);
 
@@ -82,7 +82,6 @@ filenode *split_file(char *input_path, char *output_path, long size)
         fcurr = add_filenode(&flist, fname, rbytes);
 
         printf("%s: ok\n", fname);
-
         fclose(fout);
     }
     free(fname);
@@ -140,7 +139,6 @@ void gen_sha256_file(filenode *flist, char *sum_path)
             err(EXIT_FAILURE, "%s", sum_path);
 
         calculate_sha256sum(flist);
-
         while (fcurr) {
             for (int i = 0; i < crypto_hash_sha256_BYTES; i++)
                 fprintf(fout, "%02x", fcurr->sha256[i]);
@@ -157,7 +155,6 @@ void calculate_sha256sum(filenode *flist)
     while (fcurr) {
         FILE *fin = fopen(fcurr->path, "rb");
         char *buf = malloc(fcurr->size);
-
         fread(buf, 1, fcurr->size, fin);
         crypto_hash_sha256(fcurr->sha256, (unsigned char *)buf, fcurr->size);
         free(buf);
@@ -168,10 +165,8 @@ void calculate_sha256sum(filenode *flist)
 void check_sha256sum(filenode *flist, char *sum_path)
 {
     FILE *fsum;
-    char *line = NULL;
     filenode *fcurr = flist;
     int nread;
-    size_t len = 0;
 
     fsum = fopen(sum_path, "r");
 

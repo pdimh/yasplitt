@@ -24,7 +24,7 @@
 
 struct arguments {
     char *args[2];
-    int max_size;
+    off_t max_size;
     char split, merge, sum;
     filenode *input_file;
     char *output_file;
@@ -34,13 +34,13 @@ struct arguments {
 static int parse_opt(int key, char *arg, struct argp_state *state)
 {
     struct arguments *arguments = state->input;
-    unsigned int size;
+    off_t size;
     char modifier = 0;
 
     switch (key) {
     case 's':
 
-        if (sscanf(arg, "%d%c", &size, &modifier) < 1)
+        if (sscanf(arg, "%ld%c", &size, &modifier) < 1)
             argp_failure(state, 1, 0, "Invalid MAXSIZE: %s", arg);
 
         if (modifier) {
@@ -50,35 +50,15 @@ static int parse_opt(int key, char *arg, struct argp_state *state)
                 break;
             case 'k':
             case 'K':
-                if (size <= UINT_MAX / 1024)
-                    size <<= 10;
-
-                else
-                    argp_failure(state, EXIT_FAILURE, 0,
-                                 "MAXSIZE must be smaller "
-                                 "than %u%c",
-                                 UINT_MAX / 1024 + 1, 'M');
+                size <<= 10;
                 break;
             case 'm':
             case 'M':
-                if (size <= UINT_MAX / 1024 / 1024)
-                    size <<= 20;
-
-                else
-                    argp_failure(state, EXIT_FAILURE, 0,
-                                 "MAXSIZE must be smaller "
-                                 "than %u%c",
-                                 UINT_MAX / 1024 + 1, 'M');
+                size <<= 20;
                 break;
             case 'g':
             case 'G':
-                if (size <= UINT_MAX / 1024 / 1024 / 1024)
-                    size <<= 30;
-                else
-                    argp_failure(state, EXIT_FAILURE, 0,
-                                 "MAXSIZE must be smaller "
-                                 "than %u%c",
-                                 UINT_MAX / 1024 / 1024 + 1, 'G');
+                size <<= 30;
                 break;
             default:
                 argp_failure(
@@ -87,6 +67,9 @@ static int parse_opt(int key, char *arg, struct argp_state *state)
                 break;
             }
         }
+
+        if (size <= 0)
+            argp_failure(state, EXIT_FAILURE, 0, "Invalid MAXSIZE.");
 
         arguments->split = 1;
         arguments->max_size = size;
