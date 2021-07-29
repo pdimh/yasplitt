@@ -24,7 +24,7 @@
 
 struct arguments {
     char *args[2];
-    int max_size;
+    off_t max_size;
     char split, merge, sum;
     filenode *input_file;
     char *output_file;
@@ -34,13 +34,13 @@ struct arguments {
 static int parse_opt(int key, char *arg, struct argp_state *state)
 {
     struct arguments *arguments = state->input;
-    unsigned int size;
+    off_t size;
     char modifier = 0;
 
     switch (key) {
     case 's':
 
-        if (sscanf(arg, "%d%c", &size, &modifier) < 1)
+        if (sscanf(arg, "%ld%c", &size, &modifier) < 1)
             argp_failure(state, 1, 0, "Invalid MAXSIZE: %s", arg);
 
         if (modifier) {
@@ -50,35 +50,15 @@ static int parse_opt(int key, char *arg, struct argp_state *state)
                 break;
             case 'k':
             case 'K':
-                if (size <= UINT_MAX / 1024)
-                    size <<= 10;
-
-                else
-                    argp_failure(state, EXIT_FAILURE, 0,
-                                 "MAXSIZE must be smaller "
-                                 "than %u%c",
-                                 UINT_MAX / 1024 + 1, 'M');
+                size <<= 10;
                 break;
             case 'm':
             case 'M':
-                if (size <= UINT_MAX / 1024 / 1024)
-                    size <<= 20;
-
-                else
-                    argp_failure(state, EXIT_FAILURE, 0,
-                                 "MAXSIZE must be smaller "
-                                 "than %u%c",
-                                 UINT_MAX / 1024 + 1, 'M');
+                size <<= 20;
                 break;
             case 'g':
             case 'G':
-                if (size <= UINT_MAX / 1024 / 1024 / 1024)
-                    size <<= 30;
-                else
-                    argp_failure(state, EXIT_FAILURE, 0,
-                                 "MAXSIZE must be smaller "
-                                 "than %u%c",
-                                 UINT_MAX / 1024 / 1024 + 1, 'G');
+                size <<= 30;
                 break;
             default:
                 argp_failure(
@@ -87,6 +67,9 @@ static int parse_opt(int key, char *arg, struct argp_state *state)
                 break;
             }
         }
+
+        if (size <= 0)
+            argp_failure(state, EXIT_FAILURE, 0, "Invalid MAXSIZE.");
 
         arguments->split = 1;
         arguments->max_size = size;
@@ -140,6 +123,7 @@ int main(int argc, char **argv)
         {"checksum", 'c', "SUM_PATH", 0, "Verify integrity using SHA256 sum"},
         {0}};
     struct argp argp = {options, parse_opt, "PATH", "teste"};
+    filenode *flist = NULL;
 
     if (sodium_init() < 0) {
         err(EXIT_FAILURE, "Error initing libsodium");
@@ -150,22 +134,25 @@ int main(int argc, char **argv)
     if (arguments.split) {
         if (!arguments.output_file)
             arguments.output_file = arguments.input_file->path;
-        filenode *flist = split_file(arguments.input_file->path,
-                                     arguments.output_file, arguments.max_size);
-        gen_sha256_file(flist);
+        flist = split_file(arguments.input_file->path, arguments.output_file,
+                           arguments.max_size);
+    }
+
+    if (arguments.sum && arguments.sum_file) {
+        if (arguments.split)
+            gen_sha256_file(flist, arguments.sum_file);
+        else
+            check_sha256sum(arguments.input_file, arguments.sum_file);
     }
 
     if (arguments.merge) {
         if (!arguments.output_file ||
             !strcmp(arguments.input_file->path, arguments.output_file)) {
             errx(EXIT_FAILURE,
-                 "Merge operation requires setting the output "
+                 "Merge operation requires an output "
                  "path and it must be different from input path.");
         }
-        if (arguments.sum && arguments.sum_file) {
 
-            check_sha256sum(arguments.input_file, arguments.sum_file);
-        }
         merge(arguments.input_file, arguments.output_file);
     }
 

@@ -30,9 +30,9 @@ struct filenode {
 };
 
 filenode *add_filenode(filenode **flist, char *fname, off_t size);
-filenode *split_file(char *input_path, char *output_path, long size);
+filenode *split_file(char *input_path, char *output_path, off_t size);
 void merge(filenode *input_path, char *output_path);
-void gen_sha256_file(filenode *flist);
+void gen_sha256_file(filenode *flist, char *sum_path);
 void check_sha256sum(filenode *flist, char *sum_path);
 off_t get_filesize(char *f);
 unsigned char *hex_to_byte(unsigned char *arr);

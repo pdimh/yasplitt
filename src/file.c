@@ -36,20 +36,20 @@ filenode *add_filenode(filenode **flist, char *fname, off_t size)
             curr = curr->next;
     }
     curr->next = newnode;
-    newnode->path = malloc(strlen(fname));
+    newnode->path = malloc(strlen(fname) + 1);
     newnode->size = size ? size : get_filesize(fname);
     newnode->next = NULL;
-    strncpy(newnode->path, fname, strlen(fname));
+    strncpy(newnode->path, fname, strlen(fname) + 1);
     return curr;
 }
 
-filenode *split_file(char *input_path, char *output_path, long size)
+filenode *split_file(char *input_path, char *output_path, off_t size)
 {
     filenode *fcurr;
     filenode *flist = NULL;
     FILE *fin = fopen(input_path, "rb");
     struct stat st;
-    char buf[size + 1];
+    char *buf = malloc(size);
     char *fname;
     int counter = 0;
     int padding;
@@ -64,11 +64,11 @@ filenode *split_file(char *input_path, char *output_path, long size)
     num_files = (int)ceil((float)st.st_size / size);
     padding = num_files > 1 ? (int)ceil(log10(num_files)) : 1;
 
-    fname = malloc(strlen(output_path) + padding + 5);
+    fname = malloc(strlen(output_path) + padding + 7);
 
     while (!feof(fin)) {
         FILE *fout;
-        int rbytes = fread(buf, 1, size, fin);
+        off_t rbytes = fread(buf, 1, size, fin);
 
         sprintf(fname, "%s.part.%0*d", output_path, padding, counter++);
 
@@ -82,10 +82,10 @@ filenode *split_file(char *input_path, char *output_path, long size)
         fcurr = add_filenode(&flist, fname, rbytes);
 
         printf("%s: ok\n", fname);
-
         fclose(fout);
     }
     free(fname);
+    free(buf);
     fclose(fin);
 
     return flist;
@@ -94,11 +94,15 @@ filenode *split_file(char *input_path, char *output_path, long size)
 void merge(filenode *input_path, char *output_path)
 {
     filenode *fcurr = input_path;
-    FILE *fout = fopen(output_path, "wb");
+    FILE *fout;
     char buf[BUFSIZE];
 
-    if (!fout)
+    if (!access(output_path, F_OK))
+        errx(EXIT_FAILURE, "File already exists: %s", output_path);
+
+    if (!(fout = fopen(output_path, "wb")))
         err(EXIT_FAILURE, "%s", fout);
+
     while (fcurr) {
         FILE *fin = fopen(fcurr->path, "rb");
         int rbytes;
@@ -106,8 +110,10 @@ void merge(filenode *input_path, char *output_path)
         if (!fout)
             err(EXIT_FAILURE, "%s", fin);
 
-        rbytes = fread(buf, 1, BUFSIZE, fin);
-        fwrite(buf, 1, rbytes, fout);
+        while (!feof(fin)) {
+            rbytes = fread(buf, 1, BUFSIZE, fin);
+            fwrite(buf, 1, rbytes, fout);
+        }
         fclose(fin);
 
         printf("%s\n", fcurr->path);
@@ -116,32 +122,27 @@ void merge(filenode *input_path, char *output_path)
     fclose(fout);
 }
 
-void gen_sha256_file(filenode *flist)
+void gen_sha256_file(filenode *flist, char *sum_path)
 {
 
     filenode *fcurr = flist;
 
     if (flist) {
         FILE *fout;
-        char fname[strrchr(flist->path, '.') - flist->path + 5];
 
-        strncpy(fname, flist->path, strrchr(flist->path, '.') - flist->path);
-        strncpy(fname + sizeof(fname) - 5, ".SUM", 5);
+        if (!access(sum_path, F_OK))
+            errx(EXIT_FAILURE, "File already exists: %s", sum_path);
 
-        if (!access(fname, F_OK))
-            err(EXIT_FAILURE, "File already exists: %s", fname);
-
-        fout = fopen(fname, "w");
+        fout = fopen(sum_path, "w");
 
         if (!fout)
-            err(EXIT_FAILURE, "%s", fname);
+            err(EXIT_FAILURE, "%s", sum_path);
 
         calculate_sha256sum(flist);
-
         while (fcurr) {
             for (int i = 0; i < crypto_hash_sha256_BYTES; i++)
                 fprintf(fout, "%02x", fcurr->sha256[i]);
-            fprintf(fout, " %s\n", fcurr->path);
+            fprintf(fout, "  %s\n", strdup(basename(fcurr->path)));
             fcurr = fcurr->next;
         }
         fclose(fout);
@@ -153,10 +154,10 @@ void calculate_sha256sum(filenode *flist)
     filenode *fcurr = flist;
     while (fcurr) {
         FILE *fin = fopen(fcurr->path, "rb");
-        char buf[fcurr->size];
-
+        char *buf = malloc(fcurr->size);
         fread(buf, 1, fcurr->size, fin);
         crypto_hash_sha256(fcurr->sha256, (unsigned char *)buf, fcurr->size);
+        free(buf);
         fcurr = fcurr->next;
     }
 }
@@ -164,10 +165,8 @@ void calculate_sha256sum(filenode *flist)
 void check_sha256sum(filenode *flist, char *sum_path)
 {
     FILE *fsum;
-    char *line = NULL;
     filenode *fcurr = flist;
     int nread;
-    size_t len = 0;
 
     fsum = fopen(sum_path, "r");
 
@@ -183,7 +182,7 @@ void check_sha256sum(filenode *flist, char *sum_path)
 
         rewind(fsum);
         while (!feof(fsum)) {
-            nread = fscanf(fsum, "%ms %ms\n", &sum, &fname);
+            nread = fscanf(fsum, "%ms  %ms\n", &sum, &fname);
 
             if (nread != 2)
                 errx(EXIT_FAILURE, "Error during checksum file parse. Please, "
@@ -208,7 +207,7 @@ void check_sha256sum(filenode *flist, char *sum_path)
             if (match) {
                 printf("ok\n");
             } else
-                printf("failed2\n");
+                printf("failed\n");
         } else
             printf("failed\n");
         fcurr = fcurr->next;
